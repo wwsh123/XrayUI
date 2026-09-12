@@ -1935,6 +1935,7 @@ namespace XrayUI.ViewModels
             {
                 server.DedicatedPort = result.Value.port;
                 server.AllowDedicatedLan = result.Value.allowLan;
+                server.AuxiliaryOutboundInterface = result.Value.outboundInterface;
                 server.IsDedicatedPortActive = true;
             }
 

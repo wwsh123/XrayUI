@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml.Automation;
 using XrayUI.Controls;
@@ -706,7 +707,7 @@ namespace XrayUI.Services
             return (CurrentPortValue(), lanToggle.IsOn);
         }
 
-        public async Task<(int port, bool allowLan, bool remove)?> ShowEditDedicatedPortDialogAsync(ServerEntry server, IEnumerable<int> otherUsedPorts)
+        public async Task<(int port, bool allowLan, bool remove, string outboundInterface)?> ShowEditDedicatedPortDialogAsync(ServerEntry server, IEnumerable<int> otherUsedPorts)
         {
             var usedSet = new HashSet<int>(otherUsedPorts);
             var initialPort = server.DedicatedPort ?? PortHelper.GenerateRandomAvailablePort(10000, 65000);
@@ -750,6 +751,40 @@ namespace XrayUI.Services
                 Margin = new Thickness(0),
             };
             var lanRow = CreateLabelRow(L.EditPort_AllowLan, lanToggle);
+
+            var interfaceCombo = new ComboBox
+            {
+                Header = "出口网卡",
+                MinWidth = 280,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            var autoInterface = new ComboBoxItem
+            {
+                Content = "自动绑定（按主代理及其他辅助代理顺序分配）",
+                Tag = XrayConfigConstants.TunOutboundInterfaceAuto
+            };
+            interfaceCombo.Items.Add(autoInterface);
+            ComboBoxItem? selectedInterface = null;
+            foreach (var name in EnumerateActiveInterfaceNames())
+            {
+                var item = new ComboBoxItem { Content = name, Tag = name };
+                interfaceCombo.Items.Add(item);
+                if (string.Equals(name, server.AuxiliaryOutboundInterface, StringComparison.OrdinalIgnoreCase))
+                    selectedInterface = item;
+            }
+
+            if (selectedInterface is null
+                && !string.IsNullOrWhiteSpace(server.AuxiliaryOutboundInterface)
+                && !string.Equals(server.AuxiliaryOutboundInterface, XrayConfigConstants.TunOutboundInterfaceAuto, StringComparison.OrdinalIgnoreCase))
+            {
+                selectedInterface = new ComboBoxItem
+                {
+                    Content = server.AuxiliaryOutboundInterface,
+                    Tag = server.AuxiliaryOutboundInterface
+                };
+                interfaceCombo.Items.Add(selectedInterface);
+            }
+            interfaceCombo.SelectedItem = selectedInterface ?? autoInterface;
 
             var lanAddressText = new TextBlock
             {
@@ -880,6 +915,7 @@ namespace XrayUI.Services
                     portInputRow,
                     statusText,
                     lanRow,
+                    interfaceCombo,
                     lanAddressRow,
                 }
             };
@@ -887,11 +923,30 @@ namespace XrayUI.Services
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Secondary)
             {
-                return (0, false, true); // remove
+                return (0, false, true, XrayConfigConstants.TunOutboundInterfaceAuto); // remove
             }
             if (result != ContentDialogResult.Primary) return null;
 
-            return (CurrentPortValue(), lanToggle.IsOn, false);
+            var outboundInterface = (interfaceCombo.SelectedItem as ComboBoxItem)?.Tag as string
+                ?? XrayConfigConstants.TunOutboundInterfaceAuto;
+            return (CurrentPortValue(), lanToggle.IsOn, false, outboundInterface);
+        }
+
+        private static IEnumerable<string> EnumerateActiveInterfaceNames()
+        {
+            try
+            {
+                return NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(ni => ni.OperationalStatus == OperationalStatus.Up
+                                 && !TunService.IsTunLikeInterface(ni))
+                    .Select(ni => ni.Name)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
         }
 
         public async Task<(bool createNew, ServerEntry? replacement, IReadOnlyList<ServerEntry> removedSlots)?> ShowDedicatedPortSlotChoiceDialogAsync(
