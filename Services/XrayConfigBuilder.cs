@@ -340,6 +340,15 @@ namespace XrayUI.Services
                 : value;
         }
 
+        internal static string? ResolvePrimaryProxyInterface(AppSettings settings)
+        {
+            if (!settings.IsTunMode)
+                return null;
+
+            var interfaces = NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames();
+            return ResolveRoleInterface(settings.TunOutboundInterface, interfaces, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
         private static (ServerEntry entryServer, ServerEntry exitServer) ResolveChainServers(
             ServerEntry chain,
             IEnumerable<ServerEntry>? availableServers)

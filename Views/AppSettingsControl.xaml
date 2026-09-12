@@ -159,6 +159,40 @@
                             </StackPanel>
                         </Grid>
 
+                                                <!-- Primary proxy outbound interface -->
+                                                <Grid Padding="16,12" ColumnSpacing="12"
+                                                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                            BorderThickness="0,1,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <FontIcon Grid.Column="0"
+                                                                            Glyph="&#xE839;"
+                                                                            FontSize="16"
+                                                                            VerticalAlignment="Center"
+                                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                                                        <StackPanel Grid.Column="1"
+                                                                                VerticalAlignment="Center"
+                                                                                Spacing="2">
+                                                                <TextBlock Text="主代理出口网卡"
+                                                                                     FontSize="14" />
+                                                                <TextBlock Text="TUN 模式下主代理使用的物理网卡；自动模式按系统可用网卡选择"
+                                                                                     FontSize="12"
+                                                                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                                     TextWrapping="Wrap" />
+                                                        </StackPanel>
+
+                                                        <ComboBox Grid.Column="2"
+                                                                            ItemsSource="{x:Bind ViewModel.PrimaryOutboundInterfaceOptions, Mode=OneWay}"
+                                                                            SelectedItem="{x:Bind ViewModel.PrimaryOutboundInterface, Mode=TwoWay}"
+                                                                            MinWidth="180"
+                                                                            HorizontalAlignment="Right" />
+                                                </Grid>
+
                         <!-- Allow LAN Connections -->
                         <Grid Padding="16,12" ColumnSpacing="12"
                               BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"

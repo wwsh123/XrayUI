@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -84,6 +86,11 @@ namespace XrayUI.ViewModels
 
         [ObservableProperty]
         public partial bool AllowLanConnections { get; set; }
+
+        public ObservableCollection<string> PrimaryOutboundInterfaceOptions { get; } = new();
+
+        [ObservableProperty]
+        public partial string PrimaryOutboundInterface { get; set; } = XrayConfigConstants.TunOutboundInterfaceAuto;
 
         // ── Startup ───────────────────────────────────────────────────────────
         [ObservableProperty]
@@ -173,6 +180,18 @@ namespace XrayUI.ViewModels
             AllowLanConnections = s.AllowLanConnections;
             EnableMultiNodeRouting = s.EnableMultiNodeRouting;
             RestoreProxyStateOnStartup = s.RestoreProxyStateOnStartup;
+            PrimaryOutboundInterfaceOptions.Clear();
+            PrimaryOutboundInterfaceOptions.Add(XrayConfigConstants.TunOutboundInterfaceAuto);
+            foreach (var name in NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames())
+                PrimaryOutboundInterfaceOptions.Add(name);
+            if (!string.IsNullOrWhiteSpace(s.TunOutboundInterface)
+                && !PrimaryOutboundInterfaceOptions.Contains(s.TunOutboundInterface, StringComparer.OrdinalIgnoreCase))
+            {
+                PrimaryOutboundInterfaceOptions.Add(s.TunOutboundInterface);
+            }
+            PrimaryOutboundInterface = PrimaryOutboundInterfaceOptions.FirstOrDefault(
+                name => string.Equals(name, s.TunOutboundInterface, StringComparison.OrdinalIgnoreCase))
+                ?? XrayConfigConstants.TunOutboundInterfaceAuto;
 
             try
             {
@@ -254,6 +273,7 @@ namespace XrayUI.ViewModels
             s.AllowLanConnections = AllowLanConnections;
             s.EnableMultiNodeRouting = EnableMultiNodeRouting;
             s.RestoreProxyStateOnStartup = RestoreProxyStateOnStartup;
+            s.TunOutboundInterface = PrimaryOutboundInterface;
 
             GlobalHotkeyStore.SaveTo(s);
             await _settings.SaveSettingsAsync(s);
