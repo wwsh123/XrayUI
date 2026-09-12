@@ -26,6 +26,7 @@ namespace XrayUI.Services
     {
         private readonly SettingsService _settings;
         private readonly TunService _tunService;
+        private readonly AiUnlockCheckService _aiUnlockCheck;
 
         /// <summary>
         /// Live "a TUN session currently owns the default route" check, wired by the composition
@@ -35,10 +36,14 @@ namespace XrayUI.Services
         /// </summary>
         public Func<bool> IsTunActive { get; set; } = () => false;
 
-        public RealLatencyProbeService(SettingsService settings, TunService tunService)
+        public RealLatencyProbeService(
+            SettingsService settings,
+            TunService tunService,
+            AiUnlockCheckService aiUnlockCheck)
         {
             _settings = settings;
             _tunService = tunService;
+            _aiUnlockCheck = aiUnlockCheck;
         }
 
         private const string TestUrl = "http://www.gstatic.com/generate_204";
@@ -82,7 +87,9 @@ namespace XrayUI.Services
         public async Task ProbeAllAsync(
             IReadOnlyList<ServerEntry> servers,
             Action<ServerEntry, int> onResult,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            Action<ServerEntry, AiUnlockStatus>? onAiResult = null,
+            bool reportLatency = true)
         {
             LastError = string.Empty;
             if (servers.Count == 0)
@@ -100,11 +107,23 @@ namespace XrayUI.Services
                     onResult(s, ms);
             }
 
+            void ReportAi(ServerEntry s, AiUnlockStatus status)
+            {
+                if (onAiResult is null) return;
+                if (ui is not null)
+                    ui.Post(_ => onAiResult(s, status), null);
+                else
+                    onAiResult(s, status);
+            }
+
             if (!File.Exists(XrayService.ExePath))
             {
                 LastError = Loc.Format("Xray_ExeNotFound", XrayService.ExePath);
-                foreach (var s in servers)
-                    Report(s, -1);
+                if (reportLatency)
+                {
+                    foreach (var s in servers)
+                        Report(s, -1);
+                }
                 return;
             }
 
@@ -173,8 +192,11 @@ namespace XrayUI.Services
                     LastError = log.Length > 0
                         ? log
                         : Loc.Format("Xray_ExitedImmediately", process.ExitCode);
-                    foreach (var s in servers)
-                        Report(s, -1);
+                    if (reportLatency)
+                    {
+                        foreach (var s in servers)
+                            Report(s, -1);
+                    }
                     return;
                 }
 
@@ -182,7 +204,7 @@ namespace XrayUI.Services
                 using var throttle = new SemaphoreSlim(MaxConcurrency);
                 var tasks = new List<Task>(entries.Count);
                 foreach (var (server, port) in entries)
-                    tasks.Add(ProbeOneAsync(server, port, throttle, Report, ct));
+                    tasks.Add(ProbeOneAsync(this, server, port, throttle, Report, ReportAi, reportLatency, ct));
 
                 await Task.WhenAll(tasks).ConfigureAwait(false);
             }
@@ -193,8 +215,11 @@ namespace XrayUI.Services
             catch (Exception ex)
             {
                 LastError = ex.Message;
-                foreach (var s in servers)
-                    Report(s, -1);
+                if (reportLatency)
+                {
+                    foreach (var s in servers)
+                        Report(s, -1);
+                }
             }
             finally
             {
@@ -219,10 +244,13 @@ namespace XrayUI.Services
         }
 
         private static async Task ProbeOneAsync(
+            RealLatencyProbeService probe,
             ServerEntry server,
             int port,
             SemaphoreSlim throttle,
             Action<ServerEntry, int> report,
+            Action<ServerEntry, AiUnlockStatus> reportAi,
+            bool reportLatency,
             CancellationToken ct)
         {
             await throttle.WaitAsync(ct).ConfigureAwait(false);
@@ -257,7 +285,17 @@ namespace XrayUI.Services
                         await Task.Delay(InterProbeDelayMs, timeoutCts.Token).ConfigureAwait(false);
                 }
 
-                report(server, best);
+                if (best < 0)
+                    return;
+
+                if (reportLatency)
+                    report(server, best);
+
+                // Gemini is meaningful only after the real proxy request succeeds. A failed
+                // latency probe leaves the row untested instead of spending another request.
+                var aiStatus = await probe._aiUnlockCheck.CheckGeminiAsync(port, timeoutCts.Token)
+                    .ConfigureAwait(false);
+                reportAi(server, aiStatus);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -266,7 +304,8 @@ namespace XrayUI.Services
             catch
             {
                 // Timeout, connection refused, proxy/handshake failure → unreachable.
-                report(server, -1);
+                if (reportLatency)
+                    report(server, -1);
             }
             finally
             {

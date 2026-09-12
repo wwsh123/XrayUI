@@ -336,6 +336,9 @@ namespace XrayUI.ViewModels
         /// subscription refresh replaces the node that carries the live connection.</summary>
         public Func<Task>? RequestSwitchToSelectedServer { get; set; }
 
+        /// <summary>Set by MainViewModel to select and optionally connect the best tested node.</summary>
+        public Func<IReadOnlyList<ServerEntry>, Task>? RequestSelectBestServer { get; set; }
+
         partial void OnIsProxyRunningChanged(bool value)
         {
             NotifyServerActionStateChanged();
@@ -810,15 +813,21 @@ namespace XrayUI.ViewModels
 
 			if (servers.Count == 0) return;
 
+            foreach (var server in servers)
+                server.GeminiAvailable = null;
+
             IsTestingLatencies = true;
             _latencySortUnlocked = false;
             _latencySortRefreshPending = false;
             try
             {
                 if (LatencyTestMode == "real")
-                    await TestRealLatenciesAsync(servers);
+                    await TestRealLatenciesAsync(servers, reportLatency: true);
                 else
+                {
                     await TestConnectLatenciesAsync(servers);
+                    await TestRealLatenciesAsync(servers.Where(s => !s.IsChain).ToList(), reportLatency: false);
+                }
             }
             finally
             {
@@ -833,6 +842,9 @@ namespace XrayUI.ViewModels
 
                 if (refreshLatencySort)
                     RebuildGroupedView();
+
+                if (RequestSelectBestServer is not null)
+                    await RequestSelectBestServer(servers);
             }
         }
 
@@ -868,13 +880,22 @@ namespace XrayUI.ViewModels
         // "real" mode: route a real HTTP request through each server via a dedicated throwaway
         // xray core. Works even when nothing is connected and never touches the live session.
         // Chain nodes aren't supported by the speed-test core yet, so they're skipped.
-        private Task TestRealLatenciesAsync(List<ServerEntry> servers)
+        private Task TestRealLatenciesAsync(List<ServerEntry> servers, bool reportLatency)
         {
             var testable = servers.Where(s => !s.IsChain).ToList();
             if (testable.Count == 0) return Task.CompletedTask;
 
-            // ProbeAllAsync marshals ApplyLatencyResult back onto the UI thread.
-            return _realLatencyProbe.ProbeAllAsync(testable, ApplyLatencyResult);
+            // ProbeAllAsync marshals both result types back onto the UI thread.
+            return _realLatencyProbe.ProbeAllAsync(
+                testable,
+                ApplyLatencyResult,
+                onAiResult: ApplyGeminiResult,
+                reportLatency: reportLatency);
+        }
+
+        private static void ApplyGeminiResult(ServerEntry server, AiUnlockStatus status)
+        {
+            server.GeminiAvailable = status == AiUnlockStatus.Unlocked;
         }
 
         // Per-result bookkeeping shared by both probe modes (always invoked on the UI thread,
