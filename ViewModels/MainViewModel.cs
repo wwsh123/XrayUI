@@ -525,8 +525,28 @@ namespace XrayUI.ViewModels
             }
 
             _geminiAutoSwitchAttempted.Add(failedServer.Id);
-            var nextServer = ServerList.Servers.FirstOrDefault(
-                server => !_geminiAutoSwitchAttempted.Contains(server.Id));
+
+            // Automatic switching must stay within the subscription that supplied the
+            // failed node. Manually added nodes have no subscription scope to switch in.
+            if (string.IsNullOrEmpty(failedServer.SubscriptionId)) return;
+
+            var candidates = ServerList.Servers
+                .Where(server => string.Equals(
+                    server.SubscriptionId,
+                    failedServer.SubscriptionId,
+                    StringComparison.Ordinal)
+                    && !_geminiAutoSwitchAttempted.Contains(server.Id))
+                .ToList();
+            if (candidates.Count == 0) return;
+
+            // Do not choose from stale batch results: probe this subscription immediately
+            // before switching so both latency and Gemini status describe the current run.
+            await ServerList.ProbeForAutoSwitchAsync(candidates);
+
+            var nextServer = candidates
+                .Where(server => server.GeminiAvailable == true && server.LatencyMs is >= 0)
+                .OrderBy(server => server.LatencyMs)
+                .FirstOrDefault();
             if (nextServer is null) return;
 
             _geminiAutoSwitchAttempted.Add(nextServer.Id);
@@ -551,7 +571,14 @@ namespace XrayUI.ViewModels
                 return;
 
             var best = testedServers
-                .Where(server => server.GeminiAvailable == true && server.LatencyMs is >= 0)
+                .Where(server => _activeServer is not null
+                    && !string.IsNullOrEmpty(_activeServer.SubscriptionId)
+                    && string.Equals(
+                        server.SubscriptionId,
+                        _activeServer.SubscriptionId,
+                        StringComparison.Ordinal)
+                    && server.GeminiAvailable == true
+                    && server.LatencyMs is >= 0)
                 .OrderBy(server => server.LatencyMs)
                 .FirstOrDefault();
             if (best is null)
