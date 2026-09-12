@@ -49,6 +49,7 @@
     <Compile Include="..\Models\AppSettings.cs" Link="Prod\Models\AppSettings.cs" />
     <Compile Include="..\Models\CustomRoutingRule.cs" Link="Prod\Models\CustomRoutingRule.cs" />
     <Compile Include="..\Services\XrayConfigConstants.cs" Link="Prod\Services\XrayConfigConstants.cs" />
+    <Compile Include="..\Services\NetworkInterfaceSelector.cs" Link="Prod\Services\NetworkInterfaceSelector.cs" />
     <Compile Include="..\Services\XrayLogLevel.cs" Link="Prod\Services\XrayLogLevel.cs" />
     <Compile Include="..\Services\LogMaskAddress.cs" Link="Prod\Services\LogMaskAddress.cs" />
     <Compile Include="..\Services\XrayConfigBuilder.cs" Link="Prod\Services\XrayConfigBuilder.cs" />

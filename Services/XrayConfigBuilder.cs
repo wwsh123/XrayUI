@@ -37,6 +37,12 @@ namespace XrayUI.Services
                     .ToList()
                 : (IReadOnlyList<ServerEntry>)Array.Empty<ServerEntry>();
 
+            var explicitInterface = settings.IsTunMode
+                ? NormalizeTunOutboundInterface(settings.TunOutboundInterface)
+                : null;
+            var directInterfaces = explicitInterface is null
+                ? NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames()
+                : Array.Empty<string>();
             var config = new JsonObject
             {
                 ["log"] = BuildLog(settings),
@@ -45,8 +51,8 @@ namespace XrayUI.Services
                 ["policy"] = BuildStatsPolicy(),
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings, auxServers),
-                ["outbounds"] = BuildOutbounds(server, settings, availableServers, auxServers),
-                ["routing"] = BuildRouting(settings, auxServers)
+                ["outbounds"] = BuildOutbounds(server, settings, availableServers, auxServers, directInterfaces),
+                ["routing"] = BuildRouting(settings, auxServers, directInterfaces)
             };
 
             if (IsFakeDnsActive(settings))
@@ -206,7 +212,8 @@ namespace XrayUI.Services
             ServerEntry server,
             AppSettings settings,
             IEnumerable<ServerEntry>? availableServers,
-            IReadOnlyList<ServerEntry> auxServers)
+            IReadOnlyList<ServerEntry> auxServers,
+            IReadOnlyList<string> directInterfaces)
         {
             var list = new JsonArray();
 
@@ -251,6 +258,23 @@ namespace XrayUI.Services
             };
 
             AddNode(list, direct);
+
+            for (var i = 0; i < directInterfaces.Count; i++)
+            {
+                AddNode(list, new JsonObject
+                {
+                    ["tag"] = $"direct-interface-{i}",
+                    ["protocol"] = "freedom",
+                    ["settings"] = new JsonObject(),
+                    ["streamSettings"] = new JsonObject
+                    {
+                        ["sockopt"] = new JsonObject
+                        {
+                            ["interface"] = directInterfaces[i]
+                        }
+                    }
+                });
+            }
 
             // block outbound is needed by:
             //   1. TUN mode's UDP:443 quench rule
@@ -920,14 +944,17 @@ namespace XrayUI.Services
             }
         }
 
-        private static JsonObject BuildRouting(AppSettings settings, IReadOnlyList<ServerEntry> auxServers)
+        private static JsonObject BuildRouting(
+            AppSettings settings,
+            IReadOnlyList<ServerEntry> auxServers,
+            IReadOnlyList<string> directInterfaces)
         {
             JsonObject routing;
             // Global mode bypasses both AdvancedRouting and the smart-mode default template;
             // it always force-routes everything to the proxy outbound after the TUN prefix.
             if (settings.RoutingMode == "global")
             {
-                routing = BuildGlobalRouting(settings);
+                routing = BuildGlobalRouting(settings, directInterfaces.Count > 0);
             }
             else
             {
@@ -943,7 +970,7 @@ namespace XrayUI.Services
                 // rules array so TUN process bypass rules can sit before the UDP/443 quench rule,
                 // while ordinary domain/IP rules still remain behind it.
                 var baseRules = baseRouting["rules"] as JsonArray ?? new JsonArray();
-                var rules = BuildSmartRules(settings, baseRules);
+                var rules = BuildSmartRules(settings, baseRules, directInterfaces.Count > 0);
                 baseRouting["rules"] = rules;
 
                 if (!hasAdvancedRouting)
@@ -957,6 +984,22 @@ namespace XrayUI.Services
                 }
 
                 routing = baseRouting;
+            }
+
+            if (directInterfaces.Count > 0)
+            {
+                var selectors = new JsonArray();
+                for (var i = 0; i < directInterfaces.Count; i++)
+                    AddValue(selectors, $"direct-interface-{i}");
+
+                var balancers = new JsonArray();
+                AddNode(balancers, new JsonObject
+                {
+                    ["tag"] = "direct-balancer",
+                    ["selector"] = selectors,
+                    ["strategy"] = new JsonObject { ["type"] = "random" }
+                });
+                routing["balancers"] = balancers;
             }
 
             if (auxServers.Count > 0 && routing["rules"] is JsonArray existingRules)
@@ -982,13 +1025,28 @@ namespace XrayUI.Services
                 routing["rules"] = finalRules;
             }
 
+            if (directInterfaces.Count > 0)
+            {
+                var selectors = new JsonArray();
+                for (var i = 0; i < directInterfaces.Count; i++)
+                    AddValue(selectors, $"direct-interface-{i}");
+
+                var balancers = new JsonArray();
+                AddNode(balancers, new JsonObject
+                {
+                    ["tag"] = "direct-balancer",
+                    ["selector"] = selectors,
+                    ["strategy"] = new JsonObject { ["type"] = "random" }
+                });
+                routing["balancers"] = balancers;
+            }
             return routing;
         }
 
-        private static JsonObject BuildGlobalRouting(AppSettings settings)
+        private static JsonObject BuildGlobalRouting(AppSettings settings, bool useDirectBalancer)
         {
             var rules = new JsonArray();
-            AppendTunLeadRules(rules, settings);
+            AppendTunLeadRules(rules, settings, useDirectBalancer);
             AppendTunUdp443BlockRule(rules, settings);
 
             AddNode(rules, new JsonObject
@@ -1010,23 +1068,26 @@ namespace XrayUI.Services
         /// AdvancedRouting are promoted before the UDP/443 quench rule so explicit
         /// per-process bypasses for QUIC-based clients are not shadowed.
         /// </summary>
-        private static JsonArray BuildSmartRules(AppSettings settings, JsonArray baseRules)
+        private static JsonArray BuildSmartRules(
+            AppSettings settings,
+            JsonArray baseRules,
+            bool useDirectBalancer)
         {
             var rules = new JsonArray();
 
             if (settings.IsTunMode)
             {
-                AppendTunLeadRules(rules, settings);
-                AddCustomRules(rules, settings.CustomRules, IsProcessCustomRule);
-                AddClonedRules(rules, baseRules, IsProcessRoutingRule);
+                AppendTunLeadRules(rules, settings, useDirectBalancer);
+                AddCustomRules(rules, settings.CustomRules, IsProcessCustomRule, useDirectBalancer);
+                AddClonedRules(rules, baseRules, IsProcessRoutingRule, useDirectBalancer);
                 AppendTunUdp443BlockRule(rules, settings);
-                AddCustomRules(rules, settings.CustomRules, rule => !IsProcessCustomRule(rule));
-                AddClonedRules(rules, baseRules, rule => !IsProcessRoutingRule(rule));
+                AddCustomRules(rules, settings.CustomRules, rule => !IsProcessCustomRule(rule), useDirectBalancer);
+                AddClonedRules(rules, baseRules, rule => !IsProcessRoutingRule(rule), useDirectBalancer);
             }
             else
             {
-                AddCustomRules(rules, settings.CustomRules, _ => true);
-                AddClonedRules(rules, baseRules, _ => true);
+                AddCustomRules(rules, settings.CustomRules, _ => true, useDirectBalancer);
+                AddClonedRules(rules, baseRules, _ => true, useDirectBalancer);
             }
 
             return rules;
@@ -1036,7 +1097,7 @@ namespace XrayUI.Services
         /// Adds the fixed TUN lead rules that must stay before user/advanced rules:
         /// FakeDNS DNS capture first, then xray/self direct.
         /// </summary>
-        private static void AppendTunLeadRules(JsonArray rules, AppSettings settings)
+        private static void AppendTunLeadRules(JsonArray rules, AppSettings settings, bool useDirectBalancer)
         {
             if (!settings.IsTunMode) return;
 
@@ -1054,14 +1115,16 @@ namespace XrayUI.Services
                 });
             }
 
-            AddNode(rules, new JsonObject
+            var selfRule = new JsonObject
             {
                 ["type"] = "field",
                 ["outboundTag"] = DirectOutboundTag,
                 // Keep the plain process-name fallback as well as Xray's path sugars. Process
                 // attribution for a second helper core can occasionally lack the full path.
                 ["process"] = CreateStringArray("self/", "xray/", "xray")
-            });
+            };
+            RouteDirectRuleThroughBalancer(selfRule, useDirectBalancer);
+            AddNode(rules, selfRule);
         }
 
         private static void AppendTunUdp443BlockRule(JsonArray rules, AppSettings settings)
@@ -1080,7 +1143,8 @@ namespace XrayUI.Services
         private static void AddCustomRules(
             JsonArray rules,
             IEnumerable<CustomRoutingRule>? customRules,
-            Func<CustomRoutingRule, bool> predicate)
+            Func<CustomRoutingRule, bool> predicate,
+            bool useDirectBalancer)
         {
             if (customRules is null) return;
 
@@ -1089,22 +1153,40 @@ namespace XrayUI.Services
                 if (!rule.IsEnabled || rule.MatchValues.Count == 0 || !predicate(rule))
                     continue;
 
-                AddNode(rules, CustomRuleToJsonObject(rule));
+                var node = CustomRuleToJsonObject(rule);
+                RouteDirectRuleThroughBalancer(node, useDirectBalancer);
+                AddNode(rules, node);
             }
         }
 
         private static void AddClonedRules(
             JsonArray rules,
             JsonArray sourceRules,
-            Func<JsonNode?, bool> predicate)
+            Func<JsonNode?, bool> predicate,
+            bool useDirectBalancer)
         {
             foreach (var rule in sourceRules)
             {
                 if (rule is null || !predicate(rule))
                     continue;
 
-                AddNode(rules, rule.DeepClone());
+                var clone = rule.DeepClone();
+                if (clone is JsonObject ruleObject)
+                    RouteDirectRuleThroughBalancer(ruleObject, useDirectBalancer);
+                AddNode(rules, clone);
             }
+        }
+
+        private static void RouteDirectRuleThroughBalancer(JsonObject rule, bool useDirectBalancer)
+        {
+            if (!useDirectBalancer
+                || !string.Equals(rule["outboundTag"]?.GetValue<string>(), DirectOutboundTag, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            rule.Remove("outboundTag");
+            rule["balancerTag"] = "direct-balancer";
         }
 
         private static bool IsProcessCustomRule(CustomRoutingRule rule) => rule.Type == "process";
