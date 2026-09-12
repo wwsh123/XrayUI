@@ -68,17 +68,10 @@ public class TunService
                 Debug.WriteLine($"[TunService] 配置的测速出口网卡不可用,回退自动选择: {configured}");
             }
 
-            var candidate = interfaces
-                .Where(IsAutomaticOutboundCandidate)
-                // Prefer an IPv4 gateway because the speed-test target and most node endpoints
-                // are IPv4-capable. Speed provides a deterministic tie-break for multi-NIC PCs.
-                .OrderByDescending(HasIPv4Gateway)
-                .ThenByDescending(ni => ni.Speed)
-                .ThenBy(ni => ni.Name, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
+            var candidate = NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames().FirstOrDefault();
 
             if (candidate is not null)
-                return candidate.Name;
+                return candidate;
         }
         catch (Exception ex)
         {
@@ -98,46 +91,12 @@ public class TunService
     /// by <see cref="Views.TunConfirmationDialog"/> to keep the interface picker in sync with what
     /// <see cref="ResolveOutboundInterface"/> will actually accept.</summary>
     internal static bool IsTunLikeInterface(NetworkInterface networkInterface) =>
-        networkInterface.NetworkInterfaceType is NetworkInterfaceType.Loopback
-            or NetworkInterfaceType.Tunnel
-        || string.Equals(networkInterface.Name, TunInterfaceName, StringComparison.OrdinalIgnoreCase)
-        || networkInterface.Description.Contains("Xray Tunnel", StringComparison.OrdinalIgnoreCase)
-        || networkInterface.Description.Contains("Wintun", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsAutomaticOutboundCandidate(NetworkInterface networkInterface)
-    {
-        if (networkInterface.OperationalStatus != OperationalStatus.Up
-            || IsTunLikeInterface(networkInterface))
-        {
-            return false;
-        }
-
-        // IPv6 default routers legitimately appear as link-local (fe80::) gateways via router
-        // advertisements, so they count — but only when the adapter also holds a global IPv6
-        // address. A lone fe80 gateway without one (stale RA on an isolated segment) is no
-        // evidence of an internet path and must not beat the null fallback.
-        var ipProperties = networkInterface.GetIPProperties();
-        return ipProperties.GatewayAddresses.Any(gateway =>
-            !gateway.Address.Equals(IPAddress.Any)
-            && !gateway.Address.Equals(IPAddress.IPv6Any)
-            && !IPAddress.IsLoopback(gateway.Address)
-            && (!gateway.Address.IsIPv6LinkLocal || HasGlobalIPv6Address(ipProperties)));
-    }
-
-    private static bool HasGlobalIPv6Address(IPInterfaceProperties ipProperties) =>
-        ipProperties.UnicastAddresses.Any(address =>
-            address.Address.AddressFamily == AddressFamily.InterNetworkV6
-            && !address.Address.IsIPv6LinkLocal
-            && !IPAddress.IsLoopback(address.Address));
-
-    private static bool HasIPv4Gateway(NetworkInterface networkInterface) =>
-        networkInterface.GetIPProperties().GatewayAddresses.Any(gateway =>
-            gateway.Address.AddressFamily == AddressFamily.InterNetwork
-            && !gateway.Address.Equals(IPAddress.Any));
+        string.Equals(networkInterface.Name, TunInterfaceName, StringComparison.OrdinalIgnoreCase)
+        || NetworkInterfaceSelector.IsExcludedInterface(networkInterface);
 
     /// <summary>Best-effort LAN-facing IPv4 address for display in the edit-port dialog's LAN
     /// sharing UI (not for outbound pinning — see <see cref="ResolveOutboundInterface"/> for that).
-    /// Reuses the same adapter filter (<see cref="IsTunLikeInterface"/>, <see cref="HasIPv4Gateway"/>)
+    /// Reuses the same adapter filter (<see cref="IsTunLikeInterface"/>, <see cref="NetworkInterfaceSelector.HasIPv4Gateway"/>)
     /// so "what counts as a real LAN adapter" stays defined in one place. Prefers an adapter with a
     /// real IPv4 gateway; a single gateway-less adapter is still accepted since it can be a valid
     /// isolated LAN, but with several such adapters there is no reliable way to distinguish the
@@ -161,7 +120,7 @@ public class TunService
                 if (address is null)
                     continue;
 
-                if (HasIPv4Gateway(ni))
+                if (NetworkInterfaceSelector.HasIPv4Gateway(ni))
                     gatewayed ??= address.ToString();
                 else
                 {
