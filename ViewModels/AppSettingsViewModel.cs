@@ -99,6 +99,9 @@ namespace XrayUI.ViewModels
         [ObservableProperty]
         public partial bool RestoreProxyStateOnStartup { get; set; }
 
+        [ObservableProperty]
+        public partial bool AutoSwitchMainProxy { get; set; }
+
         // ── Hotkeys ───────────────────────────────────────────────────────────
         [ObservableProperty]
         public partial string HotkeyToggleDisplay { get; set; } = "";
@@ -180,6 +183,7 @@ namespace XrayUI.ViewModels
             AllowLanConnections = s.AllowLanConnections;
             EnableMultiNodeRouting = s.EnableMultiNodeRouting;
             RestoreProxyStateOnStartup = s.RestoreProxyStateOnStartup;
+            AutoSwitchMainProxy = s.AutoSwitchMainProxy;
             PrimaryOutboundInterfaceOptions.Clear();
             PrimaryOutboundInterfaceOptions.Add(XrayConfigConstants.TunOutboundInterfaceAuto);
             foreach (var name in NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames())
@@ -273,6 +277,7 @@ namespace XrayUI.ViewModels
             s.AllowLanConnections = AllowLanConnections;
             s.EnableMultiNodeRouting = EnableMultiNodeRouting;
             s.RestoreProxyStateOnStartup = RestoreProxyStateOnStartup;
+            s.AutoSwitchMainProxy = AutoSwitchMainProxy;
             s.TunOutboundInterface = PrimaryOutboundInterface;
 
             GlobalHotkeyStore.SaveTo(s);
