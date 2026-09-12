@@ -893,6 +893,22 @@ namespace XrayUI.ViewModels
                 reportLatency: reportLatency);
         }
 
+        /// <summary>
+        /// Probes a narrowly scoped set of nodes for automatic primary-proxy switching.
+        /// The throwaway core measures both real latency and Gemini availability without
+        /// disturbing the live proxy session.
+        /// </summary>
+        public Task ProbeForAutoSwitchAsync(IReadOnlyList<ServerEntry> servers)
+        {
+            var testable = servers.Where(s => !s.IsChain).ToList();
+            if (testable.Count == 0) return Task.CompletedTask;
+
+            return _realLatencyProbe.ProbeAllAsync(
+                testable,
+                (server, latencyMs) => server.LatencyMs = latencyMs,
+                onAiResult: (server, status) => server.GeminiAvailable = status == AiUnlockStatus.Unlocked);
+        }
+
         private static void ApplyGeminiResult(ServerEntry server, AiUnlockStatus status)
         {
             server.GeminiAvailable = status == AiUnlockStatus.Unlocked;
