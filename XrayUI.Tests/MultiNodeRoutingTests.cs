@@ -171,4 +171,43 @@ public class MultiNodeRoutingTests
         Assert.Equal($"outbound_dedicated_{sgServer.Id}", rule1["outboundTag"]!.GetValue<string>());
         Assert.Equal("inbound_dedicated_10810", rule1["inboundTag"]![0]!.GetValue<string>());
     }
+
+    [Fact]
+    public void Build_TunMode_BindsPrimaryAndAuxiliaryProxyToDifferentConfiguredInterfaces()
+    {
+        var mainServer = new ServerEntry
+        {
+            Host = "main.example.com",
+            Port = 443,
+            Protocol = "vless",
+            Uuid = "11111111-1111-1111-1111-111111111111"
+        };
+        var auxServer = new ServerEntry
+        {
+            Host = "aux.example.com",
+            Port = 443,
+            Protocol = "trojan",
+            Password = "pass",
+            DedicatedPort = 10809,
+            IsDedicatedPortActive = true,
+            AuxiliaryOutboundInterface = "Ethernet 2"
+        };
+        var settings = new AppSettings
+        {
+            IsTunMode = true,
+            EnableMultiNodeRouting = true,
+            TunOutboundInterface = "Ethernet 1"
+        };
+
+        var doc = JsonNode.Parse(XrayConfigBuilder.Build(
+            mainServer, settings, new[] { mainServer, auxServer }))!.AsObject();
+
+        var primary = doc["outbounds"]!.AsArray()
+            .Single(outbound => outbound!["tag"]!.GetValue<string>() == "proxy")!;
+        var auxiliary = doc["outbounds"]!.AsArray()
+            .Single(outbound => outbound!["tag"]!.GetValue<string>() == $"outbound_dedicated_{auxServer.Id}")!;
+
+        Assert.Equal("Ethernet 1", primary["streamSettings"]!["sockopt"]!["interface"]!.GetValue<string>());
+        Assert.Equal("Ethernet 2", auxiliary["streamSettings"]!["sockopt"]!["interface"]!.GetValue<string>());
+    }
 }

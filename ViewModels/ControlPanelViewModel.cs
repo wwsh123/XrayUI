@@ -112,6 +112,8 @@ namespace XrayUI.ViewModels
             IsRunning    ? _activeServerName :
                            L.ControlPanel_StatusNotRunning;
 
+        public string PrimaryOutboundInterface { get; private set; } = "系统默认路由";
+
         partial void OnIsRunningChanged(bool value)
         {
             StartStopButtonContent = value ? L.ControlPanel_Stop : L.ControlPanel_Start;
@@ -274,6 +276,7 @@ namespace XrayUI.ViewModels
 
             var statsApiPort = ResolveStatsApiPort(LocalPort);
             var configJson = XrayConfigBuilder.Build(server, appSettings, GetAllServers(), statsApiPort);
+            PrimaryOutboundInterface = XrayConfigBuilder.ResolvePrimaryProxyInterface(appSettings) ?? "系统默认路由";
             var ok = await _xray.StartAsync(configJson, statsApiPort);
 
             if (!ok)
@@ -339,6 +342,7 @@ namespace XrayUI.ViewModels
             SystemProxyService.ClearProxy();
             _activeServer     = null;
             _activeServerName = string.Empty;
+            PrimaryOutboundInterface = "系统默认路由";
             IsRunning = false;
             await _dialogs.ShowErrorAsync(L.Error_StartFailed, ex.Message);
         }

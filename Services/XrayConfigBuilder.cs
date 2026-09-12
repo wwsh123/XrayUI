@@ -43,6 +43,7 @@ namespace XrayUI.Services
             var directInterfaces = explicitInterface is null
                 ? NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames()
                 : Array.Empty<string>();
+            var outboundInterfaces = ResolveProxyInterfaces(settings, auxServers);
             var config = new JsonObject
             {
                 ["log"] = BuildLog(settings),
@@ -51,7 +52,7 @@ namespace XrayUI.Services
                 ["policy"] = BuildStatsPolicy(),
                 ["dns"] = BuildDns(settings),
                 ["inbounds"] = BuildInbounds(settings, auxServers),
-                ["outbounds"] = BuildOutbounds(server, settings, availableServers, auxServers, directInterfaces),
+                ["outbounds"] = BuildOutbounds(server, settings, availableServers, auxServers, directInterfaces, outboundInterfaces),
                 ["routing"] = BuildRouting(settings, auxServers, directInterfaces)
             };
 
@@ -213,7 +214,8 @@ namespace XrayUI.Services
             AppSettings settings,
             IEnumerable<ServerEntry>? availableServers,
             IReadOnlyList<ServerEntry> auxServers,
-            IReadOnlyList<string> directInterfaces)
+            IReadOnlyList<string> directInterfaces,
+            IReadOnlyDictionary<string, string?> outboundInterfaces)
         {
             var list = new JsonArray();
 
@@ -225,10 +227,13 @@ namespace XrayUI.Services
                 ApplyProxySettings(proxy, ChainEntryOutboundTag);
                 AddNode(list, proxy);
                 AddNode(list, chainEntry);
+                ApplyProxyInterface(proxy, chainEntry, outboundInterfaces[ProxyOutboundTag]);
             }
             else
             {
-                AddNode(list, BuildProxyOutbound(server, ProxyOutboundTag));
+                var proxy = BuildProxyOutbound(server, ProxyOutboundTag);
+                ApplyProxyInterface(proxy, null, outboundInterfaces[ProxyOutboundTag]);
+                AddNode(list, proxy);
             }
 
             foreach (var aux in auxServers)
@@ -243,10 +248,13 @@ namespace XrayUI.Services
                     ApplyProxySettings(proxy, chainEntryTag);
                     AddNode(list, proxy);
                     AddNode(list, chainEntry);
+                    ApplyProxyInterface(proxy, chainEntry, outboundInterfaces[auxTag]);
                 }
                 else
                 {
-                    AddNode(list, BuildProxyOutbound(aux, auxTag));
+                    var auxOutbound = BuildProxyOutbound(aux, auxTag);
+                    ApplyProxyInterface(auxOutbound, null, outboundInterfaces[auxTag]);
+                    AddNode(list, auxOutbound);
                 }
             }
 
@@ -332,6 +340,15 @@ namespace XrayUI.Services
                 : value;
         }
 
+        internal static string? ResolvePrimaryProxyInterface(AppSettings settings)
+        {
+            if (!settings.IsTunMode)
+                return null;
+
+            var interfaces = NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames();
+            return ResolveRoleInterface(settings.TunOutboundInterface, interfaces, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
         private static (ServerEntry entryServer, ServerEntry exitServer) ResolveChainServers(
             ServerEntry chain,
             IEnumerable<ServerEntry>? availableServers)
@@ -396,6 +413,78 @@ namespace XrayUI.Services
             }
 
             sockopt["interface"] = interfaceName;
+        }
+
+        private static void ApplyProxyInterface(JsonObject outbound, JsonObject? chainEntry, string? interfaceName)
+        {
+            if (interfaceName is null) return;
+            ApplyOutboundInterface(outbound, interfaceName);
+            if (chainEntry is not null)
+                ApplyOutboundInterface(chainEntry, interfaceName);
+        }
+
+        private static IReadOnlyDictionary<string, string?> ResolveProxyInterfaces(
+            AppSettings settings,
+            IReadOnlyList<ServerEntry> auxServers)
+        {
+            if (!settings.IsTunMode)
+            {
+                return new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    [ProxyOutboundTag] = null
+                };
+            }
+
+            var interfaces = NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                [ProxyOutboundTag] = ResolveRoleInterface(settings.TunOutboundInterface, interfaces, used)
+            };
+
+            if (result[ProxyOutboundTag] is { } primaryInterface)
+                used.Add(primaryInterface);
+
+            var nextIndex = 0;
+            foreach (var aux in auxServers)
+            {
+                var tag = $"outbound_dedicated_{aux.Id}";
+                var configured = NormalizeTunOutboundInterface(aux.AuxiliaryOutboundInterface);
+                var resolved = configured ?? NextUnusedInterface(interfaces, used, ref nextIndex);
+                result[tag] = resolved;
+                if (resolved is not null)
+                    used.Add(resolved);
+            }
+
+            return result;
+        }
+
+        private static string? ResolveRoleInterface(
+            string? configured,
+            IReadOnlyList<string> interfaces,
+            ISet<string> used)
+        {
+            var explicitInterface = NormalizeTunOutboundInterface(configured);
+            if (explicitInterface is not null)
+                return explicitInterface;
+
+            var nextIndex = 0;
+            return NextUnusedInterface(interfaces, used, ref nextIndex);
+        }
+
+        private static string? NextUnusedInterface(
+            IReadOnlyList<string> interfaces,
+            ISet<string> used,
+            ref int nextIndex)
+        {
+            while (nextIndex < interfaces.Count)
+            {
+                var candidate = interfaces[nextIndex++];
+                if (!used.Contains(candidate))
+                    return candidate;
+            }
+
+            return null;
         }
 
         private static JsonObject BuildProxyOutbound(ServerEntry server, string tag)

@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using XrayUI.Helpers;
+using XrayUI.Services;
 
 namespace XrayUI.Models
 {
@@ -43,6 +44,7 @@ namespace XrayUI.Models
             WgPreSharedKey = string.Empty;
             WgLocalAddress = string.Empty;
             WgReserved = string.Empty;
+            AuxiliaryOutboundInterface = XrayConfigConstants.TunOutboundInterfaceAuto;
         }
 
         /// <summary>ID of the subscription this node was imported from; empty = manually added.</summary>
@@ -221,6 +223,10 @@ namespace XrayUI.Models
         /// <summary>Whether this server's dedicated port accepts connections from local network devices.</summary>
         [ObservableProperty]
         public partial bool AllowDedicatedLan { get; set; }
+
+        /// <summary>Physical interface for this auxiliary proxy. "auto" assigns the next available interface.</summary>
+        [ObservableProperty]
+        public partial string AuxiliaryOutboundInterface { get; set; }
 
         [JsonIgnore]
         public string DedicatedPortDisplay => DedicatedPort.HasValue ? $":{DedicatedPort.Value}" : string.Empty;

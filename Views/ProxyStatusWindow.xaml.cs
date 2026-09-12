@@ -20,6 +20,7 @@ namespace XrayUI.Views
         private readonly Func<ServerEntry?> _primary;
         private readonly Func<ServerEntry?, string> _subscription;
         private readonly Func<int> _localPort;
+        private readonly Func<string> _primaryOutboundInterface;
         private readonly Func<Task> _stopPrimary;
         private readonly Func<ServerEntry, Task> _stopAuxiliary;
         private readonly ObservableCollection<ProxyStatusItem> _items = new();
@@ -34,6 +35,7 @@ namespace XrayUI.Views
             Func<ServerEntry?> primary,
             Func<ServerEntry?, string> subscription,
             Func<int> localPort,
+            Func<string> primaryOutboundInterface,
             Func<Task> stopPrimary,
             Func<ServerEntry, Task> stopAuxiliary)
         {
@@ -43,6 +45,7 @@ namespace XrayUI.Views
             _primary = primary;
             _subscription = subscription;
             _localPort = localPort;
+            _primaryOutboundInterface = primaryOutboundInterface;
             _stopPrimary = stopPrimary;
             _stopAuxiliary = stopAuxiliary;
             Title = "已启用的代理";
@@ -84,7 +87,8 @@ namespace XrayUI.Views
                 items.Add(ProxyStatusItem.Primary(
                     primary,
                     _subscription(primary),
-                    _localPort()));
+                    _localPort(),
+                    _primaryOutboundInterface()));
             }
 
             var auxiliary = _servers()
@@ -205,10 +209,10 @@ namespace XrayUI.Views
         public required bool IsPrimary { get; init; }
         public ServerEntry? Server { get; init; }
 
-        public static ProxyStatusItem Primary(ServerEntry? server, string subscription, int port) => new()
+        public static ProxyStatusItem Primary(ServerEntry? server, string subscription, int port, string outboundInterface) => new()
         {
             Name = $"主代理 · {server?.Name ?? "未知节点"}",
-            Details = $"订阅：{subscription}    端口：{port}",
+            Details = $"订阅：{subscription}    端口：{port}    出口网卡：{outboundInterface}",
             IsPrimary = true
         };
 

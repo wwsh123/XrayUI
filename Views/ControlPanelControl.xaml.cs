@@ -130,6 +130,7 @@ namespace XrayUI.Views
                     () => main.ViewModel.ServerDetail.ActiveServer,
                     main.ViewModel.ServerList.GetGroupDisplayName,
                     () => ViewModel.LocalPort,
+                    () => ViewModel.PrimaryOutboundInterface,
                     async () =>
                     {
                         if (ViewModel.StartStopCommand.CanExecute(null))
