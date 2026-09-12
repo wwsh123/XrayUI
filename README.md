@@ -47,19 +47,6 @@
 
 ---
 
-## 📥 下载与安装
-
-前往 [👉 Releases 页面](https://github.com/vimbackground/XrayUI/releases/latest) 下载最新版本：
-
-| 版本类型 | 适用人群 | 下载链接 |
-| :--- | :--- | :--- |
-| **x64 常规版 (强烈推荐 🌟)** | 绝大多数 Windows 电脑（Intel / AMD 处理器） | [下载 XrayUI-win-x64.zip](https://github.com/vimbackground/XrayUI/releases/latest) |
-| **ARM64 常规版** | Surface Pro X、骁龙本等 ARM 架构 Windows 电脑 | [下载 XrayUI-win-arm64.zip](https://github.com/vimbackground/XrayUI/releases/latest) |
-| **独立完整版 (wasdk)** | 仅当普通版提示缺少 Windows 运行库无法启动时使用 | [下载包含运行时的完整版](https://github.com/vimbackground/XrayUI/releases/latest) |
-
-> 💡 **使用方法**：下载 `.zip` 压缩包后，**解压到任意文件夹**，双击运行 `XrayUI-Portable.exe` 即可使用！
-
----
 
 ## 🧭 常见问题 (FAQ)
 
