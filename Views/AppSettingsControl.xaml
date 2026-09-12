@@ -105,6 +105,40 @@
                                           MinWidth="0"
                                           VerticalAlignment="Center" />
                         </Grid>
+
+                        <Grid Padding="16,12" ColumnSpacing="12"
+                              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                              BorderThickness="0,1,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <FontIcon Grid.Column="0"
+                                      Glyph="&#xE8AB;"
+                                      FontSize="16"
+                                      VerticalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <StackPanel Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="2">
+                                <TextBlock Text="主代理自动切换"
+                                           FontSize="14" />
+                                <TextBlock Text="测速并检测 Gemini 后，自动选择延迟最低且 Gemini 可用的节点"
+                                           FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <ToggleSwitch Grid.Column="2"
+                                          IsOn="{x:Bind ViewModel.AutoSwitchMainProxy, Mode=TwoWay}"
+                                          OnContent=""
+                                          OffContent=""
+                                          MinWidth="0"
+                                          VerticalAlignment="Center" />
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

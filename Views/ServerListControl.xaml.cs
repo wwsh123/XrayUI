@@ -291,6 +291,16 @@ namespace XrayUI.Views
 
         public static string ConnectionStatusText(bool isActive) => isActive ? "已连接" : "未连接";
 
+        public static Visibility GeminiStatusVisibility(bool? available)
+            => available.HasValue ? Visibility.Visible : Visibility.Collapsed;
+
+        public static string GeminiStatusText(bool? available)
+            => available == true ? "Gemini 可用" : "Gemini 不可用";
+
+        public static Brush GeminiStatusBrush(bool? available)
+            => (Brush)Application.Current.Resources[
+                available == true ? "LatencyGoodBrush" : "LatencyFailBrush"];
+
         private static MenuFlyoutItem CreateMenuItem(string text, string glyph)
         {
             return new MenuFlyoutItem

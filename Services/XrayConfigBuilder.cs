@@ -429,31 +429,33 @@ namespace XrayUI.Services
         {
             if (!settings.IsTunMode)
             {
-                return new Dictionary<string, string?>(StringComparer.Ordinal)
+                var nonTunResult = new Dictionary<string, string?>(StringComparer.Ordinal)
                 {
                     [ProxyOutboundTag] = null
                 };
+                foreach (var aux in auxServers)
+                {
+                    nonTunResult[$"outbound_dedicated_{aux.Id}"] = null;
+                }
+
+                return nonTunResult;
             }
 
             var interfaces = NetworkInterfaceSelector.GetEligiblePhysicalInterfaceNames();
-            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var primaryInterface = ResolveRoleInterface(
+                settings.TunOutboundInterface,
+                interfaces,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
             var result = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                [ProxyOutboundTag] = ResolveRoleInterface(settings.TunOutboundInterface, interfaces, used)
+                [ProxyOutboundTag] = primaryInterface
             };
 
-            if (result[ProxyOutboundTag] is { } primaryInterface)
-                used.Add(primaryInterface);
-
-            var nextIndex = 0;
             foreach (var aux in auxServers)
             {
                 var tag = $"outbound_dedicated_{aux.Id}";
                 var configured = NormalizeTunOutboundInterface(aux.AuxiliaryOutboundInterface);
-                var resolved = configured ?? NextUnusedInterface(interfaces, used, ref nextIndex);
-                result[tag] = resolved;
-                if (resolved is not null)
-                    used.Add(resolved);
+                result[tag] = configured ?? primaryInterface;
             }
 
             return result;

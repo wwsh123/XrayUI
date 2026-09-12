@@ -86,6 +86,11 @@ namespace XrayUI.Models
         [NotifyPropertyChangedFor(nameof(HasLatency))]
         public partial int? LatencyMs { get; set; }
 
+        // Runtime-only Gemini availability from the latest batch test; null = not tested.
+        [JsonIgnore]
+        [ObservableProperty]
+        public partial bool? GeminiAvailable { get; set; }
+
         [ObservableProperty]
         public partial bool IsFavorite { get; set; }
 

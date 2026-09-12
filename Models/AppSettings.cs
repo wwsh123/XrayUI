@@ -27,6 +27,8 @@ namespace XrayUI.Models
         public bool TunIpv6Enabled { get; set; } = false;
         public bool IsStartupEnabled { get; set; } = false;
         public bool IsAutoConnect    { get; set; } = false;
+        /// <summary>When true, latency/Gemini batch tests may switch the main proxy to the best usable node.</summary>
+        public bool AutoSwitchMainProxy { get; set; } = false;
         /// <summary>Whether to restore the proxy running state (both main server and auxiliary servers) from when the app last closed.</summary>
         public bool RestoreProxyStateOnStartup { get; set; } = false;
         /// <summary>Stable ID (ServerEntry.Id) of the server that was actively running as the main proxy when the app exited.</summary>

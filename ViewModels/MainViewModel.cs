@@ -91,8 +91,8 @@ namespace XrayUI.ViewModels
             var latencyProbe = new LatencyProbeService(
                 new TcpConnectProbeService(),
                 new PingProbeService());
-            var realLatencyProbe = new RealLatencyProbeService(settings, tunService);
             var aiUnlockCheck = new AiUnlockCheckService();
+            var realLatencyProbe = new RealLatencyProbeService(settings, tunService, aiUnlockCheck);
 
             Title = "Proxy Console";
 
@@ -114,6 +114,7 @@ namespace XrayUI.ViewModels
             // the selected node, so property notifications on ServerEntry can't cover it.
             ServerList.GroupNamesChanged += ServerDetail.RefreshGroupName;
             ServerList.RequestSwitchToSelectedServer = ControlPanel.SwitchToSelectedServerAsync;
+            ServerList.RequestSelectBestServer = SelectBestTestedServerAsync;
             ServerList.RequestReapplyRouting = ControlPanel.ReapplyRoutingAsync;
             // Live TUN state for the speed test's egress pin — settings.IsTunMode alone lags
             // the UI toggle and can survive a crash as a stale true (see IDialogService remarks).
@@ -181,6 +182,7 @@ namespace XrayUI.ViewModels
             // launch proves the task exists (it started this process).
             ControlPanel.IsStartupEnabled = s.IsStartupEnabled;
             ControlPanel.IsAutoConnect    = s.IsAutoConnect;
+            AppSettings.AutoSwitchMainProxy = s.AutoSwitchMainProxy;
             _ = ReconcileStartupTaskAsync(s, isBootLaunch);
 
             // Translate the legacy name-based auto-connect setting to Id-based so users
@@ -514,7 +516,8 @@ namespace XrayUI.ViewModels
 
         private async Task SwitchToNextGeminiServerAsync(ServerEntry failedServer)
         {
-            if (!ControlPanel.IsRunning
+            if (!AppSettings.AutoSwitchMainProxy
+                || !ControlPanel.IsRunning
                 || ControlPanel.IsReapplying
                 || !ReferenceEquals(_activeServer, failedServer))
             {
@@ -537,6 +540,29 @@ namespace XrayUI.ViewModels
             {
                 _geminiAutoSwitchInProgress = false;
             }
+        }
+
+        private async Task SelectBestTestedServerAsync(IReadOnlyList<ServerEntry> testedServers)
+        {
+            if (!AppSettings.AutoSwitchMainProxy)
+                return;
+
+            if (_activeServer?.GeminiAvailable == true)
+                return;
+
+            var best = testedServers
+                .Where(server => server.GeminiAvailable == true && server.LatencyMs is >= 0)
+                .OrderBy(server => server.LatencyMs)
+                .FirstOrDefault();
+            if (best is null)
+                return;
+
+            if (ReferenceEquals(best, _activeServer))
+                return;
+
+            ServerList.SelectedServer = best;
+            if (ControlPanel.IsRunning)
+                await ControlPanel.ConnectToServerAsync(best);
         }
 
         private void OpenPersonalize()

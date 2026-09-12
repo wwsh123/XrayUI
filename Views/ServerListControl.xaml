@@ -297,6 +297,12 @@
                                                    FontWeight="SemiBold"
                                                    VerticalAlignment="Center"
                                                    Foreground="{x:Bind views:ServerListControl.LatencyForeground(LatencyMs), Mode=OneWay}" />
+                                        <TextBlock Text="{x:Bind views:ServerListControl.GeminiStatusText(GeminiAvailable), Mode=OneWay}"
+                                                   Visibility="{x:Bind views:ServerListControl.GeminiStatusVisibility(GeminiAvailable), Mode=OneWay}"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{x:Bind views:ServerListControl.GeminiStatusBrush(GeminiAvailable), Mode=OneWay}" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal"
