@@ -16,6 +16,9 @@ namespace XrayUI.Views
         public ControlPanelControl()
         {
             this.InitializeComponent();
+            var trafficLabel = Loc.GetString("Traffic_OpenTooltip");
+            ToolTipService.SetToolTip(TrafficButton, trafficLabel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(TrafficButton, trafficLabel);
             ToolTipService.SetToolTip(PersonalizeButton, L.ControlPanel_Personalize);
             ToolTipService.SetToolTip(ModeSettingsButton, L.ControlPanel_ModeSettings);
             ToolTipService.SetToolTip(AppSettingsButton, L.ControlPanel_AppSettings);

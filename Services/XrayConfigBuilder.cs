@@ -47,7 +47,7 @@ namespace XrayUI.Services
             var config = new JsonObject
             {
                 ["log"] = BuildLog(settings),
-                    ["api"] = BuildStatsApi(statsApiPort ?? GetStatsApiPort(settings.LocalMixedPort)),
+                ["api"] = BuildStatsApi(statsApiPort ?? GetStatsApiPort(settings.LocalMixedPort)),
                 ["stats"] = new JsonObject(),
                 ["policy"] = BuildStatsPolicy(),
                 ["dns"] = BuildDns(settings),
@@ -94,7 +94,9 @@ namespace XrayUI.Services
             ["system"] = new JsonObject
             {
                 ["statsInboundUplink"] = true,
-                ["statsInboundDownlink"] = true
+                ["statsInboundDownlink"] = true,
+                ["statsOutboundUplink"] = true,
+                ["statsOutboundDownlink"] = true
             }
         };
 

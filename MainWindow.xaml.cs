@@ -57,6 +57,7 @@ namespace XrayUI
         private const int HtCaption = 0x0002;
         private const int FullWindowWidth = 1080;
         private const int FullWindowHeight = 660;
+        private const int TrafficMinHeight = 650;
         private const int FullModeMinWidth = 430;
         private const int FullModeMinHeight = 260;
         private const int MiniWindowWidth = 330;
@@ -508,13 +509,13 @@ namespace XrayUI
             }
 
             var width  = isMini ? MiniWindowWidth  : FullWindowWidth;
-            var height = isMini ? MiniWindowHeight : FullWindowHeight;
+            var height = isMini ? MiniWindowHeight : ViewModel.TrafficVisibility == Visibility.Visible ? TrafficMinHeight : FullWindowHeight;
 
             // The WinUIEx min-size clamp (WM_GETMINMAXINFO) applies to SetWindowSize
             // too, so the full-mode minimum must be relaxed before shrinking to mini.
             var windowManager = WindowManager.Get(this);
             windowManager.MinWidth  = isMini ? MiniWindowWidth  : FullModeMinWidth;
-            windowManager.MinHeight = isMini ? MiniWindowHeight : FullModeMinHeight;
+            windowManager.MinHeight = isMini ? MiniWindowHeight : ViewModel.TrafficVisibility == Visibility.Visible ? TrafficMinHeight : FullModeMinHeight;
 
             presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: !isMini);
             presenter.IsResizable = !isMini;
@@ -612,6 +613,21 @@ namespace XrayUI
                 if (_trayIcon is not null)
                     _trayIcon.Tooltip = ViewModel.TrayTooltip;
                 return;
+            }
+
+            if (e.PropertyName is nameof(MainViewModel.TrafficVisibility) or nameof(MainViewModel.IsMiniMode))
+            {
+                var trafficVisible = ViewModel.TrafficVisibility == Visibility.Visible && !ViewModel.IsMiniMode;
+                WindowManager.Get(this).MinHeight = ViewModel.IsMiniMode ? MiniWindowHeight : trafficVisible ? TrafficMinHeight : FullModeMinHeight;
+                if (trafficVisible)
+                {
+                    if (_rootElement.ActualHeight > 0 && _rootElement.ActualHeight < TrafficMinHeight &&
+                        ((OverlappedPresenter)AppWindow.Presenter).State != OverlappedPresenterState.Maximized)
+                        this.SetWindowSize(Math.Max(_rootElement.ActualWidth, FullModeMinWidth), TrafficMinHeight);
+                    if (TrafficHost.Children.Count == 0)
+                        TrafficHost.Children.Add(new Views.TrafficMonitorControl { ViewModel = ViewModel.Traffic });
+                }
+                else TrafficHost.Children.Clear();
             }
 
             if (!_personalizeRealized && e.PropertyName == nameof(MainViewModel.PersonalizeVisibility) && ViewModel.PersonalizeVisibility == Visibility.Visible)
@@ -739,6 +755,7 @@ namespace XrayUI
         {
             ViewModel.PersistProxyRunningStateOnExit();
             ViewModel.StopSubscriptionRefreshScheduler();
+            ViewModel.StopTrafficCollection();
             ViewModel.ControlPanel.XrayService.StopForShutdown();
             ViewModel.ControlPanel.CleanupTunOnExit(fastShutdown);
         }
