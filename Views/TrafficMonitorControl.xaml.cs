@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -9,7 +10,19 @@ namespace XrayUI.Views;
 
 public sealed partial class TrafficMonitorControl : UserControl
 {
-    public TrafficMonitorViewModel ViewModel { get; set; } = null!;
+    private TrafficMonitorViewModel? _viewModel;
+    public TrafficMonitorViewModel ViewModel
+    {
+        get => _viewModel ??= new TrafficMonitorViewModel();
+        set
+        {
+            if (ReferenceEquals(_viewModel, value)) return;
+            _viewModel = value ?? new TrafficMonitorViewModel();
+            if (IsLoaded)
+                StartObserving();
+        }
+    }
+
     private DispatcherQueueTimer? _timer;
     public TrafficMonitorControl()
     {
@@ -23,29 +36,44 @@ public sealed partial class TrafficMonitorControl : UserControl
     }
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_timer != null) return;
-        ViewModel.PropertyChanged += OnViewModelChanged;
-        ViewModel.Refresh();
-        Chart.SetSamples(ViewModel.Samples, ViewModel.WindowMinutes);
-        _timer = DispatcherQueue.CreateTimer();
-        _timer.Interval = TimeSpan.FromMilliseconds(250);
-        _timer.Tick += OnTick;
-        _timer.Start();
+        StartObserving();
+    }
+    private void StartObserving()
+    {
+        if (_viewModel is null || _timer is not null) return;
+        try
+        {
+            _viewModel.PropertyChanged += OnViewModelChanged;
+            _viewModel.Refresh();
+            Chart.SetSamples(_viewModel.Samples, _viewModel.WindowMinutes);
+            _timer = DispatcherQueue.CreateTimer();
+            _timer.Interval = TimeSpan.FromMilliseconds(250);
+            _timer.Tick += OnTick;
+            _timer.Start();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TrafficMonitorControl] StartObserving failed: {ex}");
+            _timer = null;
+        }
     }
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         if (_timer == null) return;
         _timer.Stop(); _timer.Tick -= OnTick; _timer = null;
-        ViewModel.PropertyChanged -= OnViewModelChanged;
+        if (_viewModel is not null)
+            _viewModel.PropertyChanged -= OnViewModelChanged;
     }
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
-        if (ViewModel.HasSource && Visibility == Visibility.Visible) ViewModel.Refresh();
+        if (_viewModel is null) return;
+        if (_viewModel.HasSource && Visibility == Visibility.Visible) _viewModel.Refresh();
     }
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (_viewModel is null) return;
         if (e.PropertyName is nameof(TrafficMonitorViewModel.Samples) or nameof(TrafficMonitorViewModel.WindowMinutes))
-            Chart.SetSamples(ViewModel.Samples, ViewModel.WindowMinutes);
+            Chart.SetSamples(_viewModel.Samples, _viewModel.WindowMinutes);
     }
     private void Clear_Click(object sender, RoutedEventArgs e) => ViewModel.Clear();
     private async void Details_Click(object sender, RoutedEventArgs e) => await ShowDetailsAsync();

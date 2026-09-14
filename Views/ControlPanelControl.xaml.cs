@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Windows.System;
 using XrayUI.Helpers;
 
@@ -155,16 +156,24 @@ namespace XrayUI.Views
 
         private void OnShowTrafficRequested(object? sender, EventArgs e)
         {
-            if (_trafficWindow is null)
+            try
             {
-                if ((Application.Current as App)?.Window is not XrayUI.MainWindow mainWindow)
-                    return;
+                if (_trafficWindow is null)
+                {
+                    if ((Application.Current as App)?.Window is not XrayUI.MainWindow mainWindow)
+                        return;
 
-                _trafficWindow = new TrafficMonitorWindow(mainWindow.ViewModel.Traffic);
-                _trafficWindow.Closed += (_, _) => _trafficWindow = null;
+                    _trafficWindow = new TrafficMonitorWindow(mainWindow.ViewModel.Traffic);
+                    _trafficWindow.Closed += (_, _) => _trafficWindow = null;
+                }
+
+                _trafficWindow.Activate();
             }
-
-            _trafficWindow.Activate();
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Traffic] Failed to open traffic window: {ex}");
+                _trafficWindow = null;
+            }
         }
 
         private void OnShowCustomRulesRequested(object? sender, CustomRulesViewModel vm)
