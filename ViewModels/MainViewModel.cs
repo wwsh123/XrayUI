@@ -8,6 +8,7 @@ using Microsoft.UI.Dispatching;
 using XrayUI.Helpers;
 using XrayUI.Models;
 using XrayUI.Services;
+using XrayUI.Services.Traffic;
 
 namespace XrayUI.ViewModels
 {
@@ -20,12 +21,16 @@ namespace XrayUI.ViewModels
         private readonly DispatcherQueue? _uiDispatcher;
         private DispatcherQueueTimer? _subscriptionRefreshTimer;
         private bool _updateCheckQueued;
+        private readonly TrafficMonitorStore _trafficStore;
+        private readonly XrayTrafficCollector _trafficCollector;
         private ServerEntry? _activeServer;
         private string _activeLatencyText = string.Empty;
         private bool _showPersonalize;
         private bool _showAppSettings;
+    private bool _showTraffic;
         private readonly HashSet<string> _geminiAutoSwitchAttempted = new(StringComparer.Ordinal);
         private bool _geminiAutoSwitchInProgress;
+        public TrafficMonitorViewModel Traffic { get; } = new();
 
         public ServerListViewModel   ServerList   { get; }
         public ServerDetailViewModel ServerDetail { get; }
@@ -34,10 +39,12 @@ namespace XrayUI.ViewModels
         public AppSettingsViewModel  AppSettings  { get; }
         public event EventHandler? ExitRequested;
 
-        public Visibility MainContentVisibility => (!_showPersonalize && !_showAppSettings) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility MainContentVisibility => (!_showPersonalize && !_showAppSettings && !_showTraffic) ? Visibility.Visible : Visibility.Collapsed;
         public Visibility PersonalizeVisibility  => _showPersonalize ? Visibility.Visible   : Visibility.Collapsed;
         public Visibility AppSettingsVisibility  => _showAppSettings ? Visibility.Visible   : Visibility.Collapsed;
-        public Visibility BackButtonVisibility   => (_showPersonalize || _showAppSettings) ? Visibility.Visible   : Visibility.Collapsed;
+    public Visibility TrafficVisibility => _showTraffic ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility WorkspaceVisibility => _showTraffic ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility BackButtonVisibility => (_showPersonalize || _showAppSettings || _showTraffic) ? Visibility.Visible : Visibility.Collapsed;
         public Visibility MiniModeVisibility     => IsMiniMode       ? Visibility.Visible   : Visibility.Collapsed;
         public Visibility FullModeVisibility     => IsMiniMode       ? Visibility.Collapsed : Visibility.Visible;
 
@@ -84,6 +91,13 @@ namespace XrayUI.ViewModels
             _settings       = settings;
             _startupService = startupService;
             _updateService  = updateService;
+            _trafficStore = new TrafficMonitorStore(new TrafficMonitorOptions(
+                [XrayConfigConstants.MixedInboundTag, XrayConfigConstants.TunInboundTag],
+                ["proxy", "direct"]));
+            _trafficCollector = new XrayTrafficCollector(_trafficStore, XrayService.ExePath,
+                XrayConfigBuilder.GetStatsApiPort(new AppSettings().LocalMixedPort));
+            Traffic = new TrafficMonitorViewModel(_trafficStore);
+            xray.LogReceived += (_, line) => _trafficCollector.RecordLogLine(line);
             // MainViewModel is constructed on the UI thread (in MainWindow ctor before
             // InitializeComponent), so capturing the dispatcher here is safe and avoids
             // depending on Application.Current later from a background thread.
@@ -597,10 +611,26 @@ namespace XrayUI.ViewModels
             Personalize.LoadFromStore();
             _showPersonalize = true;
             _showAppSettings = false;
+            _showTraffic = false;
             OnPropertyChanged(nameof(MainContentVisibility));
             OnPropertyChanged(nameof(PersonalizeVisibility));
             OnPropertyChanged(nameof(AppSettingsVisibility));
             OnPropertyChanged(nameof(BackButtonVisibility));
+            OnPropertyChanged(nameof(TrafficVisibility));
+            OnPropertyChanged(nameof(WorkspaceVisibility));
+        }
+
+        private void OpenTraffic()
+        {
+            _showTraffic = true;
+            _showPersonalize = false;
+            _showAppSettings = false;
+            OnPropertyChanged(nameof(MainContentVisibility));
+            OnPropertyChanged(nameof(PersonalizeVisibility));
+            OnPropertyChanged(nameof(AppSettingsVisibility));
+            OnPropertyChanged(nameof(BackButtonVisibility));
+            OnPropertyChanged(nameof(TrafficVisibility));
+            OnPropertyChanged(nameof(WorkspaceVisibility));
         }
 
         private void ClosePersonalize()
@@ -610,6 +640,8 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(PersonalizeVisibility));
             OnPropertyChanged(nameof(AppSettingsVisibility));
             OnPropertyChanged(nameof(BackButtonVisibility));
+            OnPropertyChanged(nameof(TrafficVisibility));
+            OnPropertyChanged(nameof(WorkspaceVisibility));
         }
 
         private void OpenAppSettings()
@@ -635,6 +667,8 @@ namespace XrayUI.ViewModels
             OnPropertyChanged(nameof(PersonalizeVisibility));
             OnPropertyChanged(nameof(AppSettingsVisibility));
             OnPropertyChanged(nameof(BackButtonVisibility));
+            OnPropertyChanged(nameof(TrafficVisibility));
+            OnPropertyChanged(nameof(WorkspaceVisibility));
         }
 
         // ── Back navigation (TitleBar back button) ────────────────────────────
@@ -645,6 +679,16 @@ namespace XrayUI.ViewModels
         {
             if (_showPersonalize) ClosePersonalize();
             else if (_showAppSettings) CloseAppSettings();
+            else if (_showTraffic) CloseTraffic();
+        }
+
+        private void CloseTraffic()
+        {
+            _showTraffic = false;
+            OnPropertyChanged(nameof(MainContentVisibility));
+            OnPropertyChanged(nameof(TrafficVisibility));
+            OnPropertyChanged(nameof(WorkspaceVisibility));
+            OnPropertyChanged(nameof(BackButtonVisibility));
         }
 
         private void OnAppSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -766,6 +810,10 @@ namespace XrayUI.ViewModels
             var isRunning = ControlPanel.IsRunning;
             if (!isRunning && !_geminiAutoSwitchInProgress)
                 _geminiAutoSwitchAttempted.Clear();
+            if (isRunning)
+                _trafficCollector.StartSession(ControlPanel.XrayService.StatsApiPort);
+            else
+                _trafficCollector.StopSession();
             UpdateActiveServer(isRunning ? ServerList.SelectedServer : null);
             ServerList.IsProxyRunning = isRunning;
             OnPropertyChanged(nameof(ActiveServerName));
@@ -785,6 +833,12 @@ namespace XrayUI.ViewModels
             // minute tick — a visible lag right after the user connects and opens the list.
             if (isRunning)
                 _ = RunSubscriptionRefreshCheckAsync();
+        }
+
+        public void StopTrafficCollection()
+        {
+            _trafficCollector.StopSession();
+            _ = _trafficCollector.DisposeAsync();
         }
 
         private void UpdateActiveServer(ServerEntry? server)

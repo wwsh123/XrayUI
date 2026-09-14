@@ -614,6 +614,11 @@ namespace XrayUI
                 return;
             }
 
+            if (e.PropertyName is nameof(MainViewModel.IsMiniMode))
+            {
+                WindowManager.Get(this).MinHeight = ViewModel.IsMiniMode ? MiniWindowHeight : FullModeMinHeight;
+            }
+
             if (!_personalizeRealized && e.PropertyName == nameof(MainViewModel.PersonalizeVisibility) && ViewModel.PersonalizeVisibility == Visibility.Visible)
             {
                 _personalizeRealized = true;
@@ -739,6 +744,7 @@ namespace XrayUI
         {
             ViewModel.PersistProxyRunningStateOnExit();
             ViewModel.StopSubscriptionRefreshScheduler();
+            ViewModel.StopTrafficCollection();
             ViewModel.ControlPanel.XrayService.StopForShutdown();
             ViewModel.ControlPanel.CleanupTunOnExit(fastShutdown);
         }

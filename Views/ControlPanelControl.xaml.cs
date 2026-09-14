@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Windows.System;
 using XrayUI.Helpers;
 
@@ -10,12 +11,16 @@ namespace XrayUI.Views
         private ProxyRuntimeWindow? _runtimeWindow;
         private ProxyStatusWindow? _proxyStatusWindow;
         private CustomRulesWindow? _customRulesWindow;
+        private TrafficMonitorWindow? _trafficWindow;
 
         public ControlPanelViewModel ViewModel { get; set; } = null!;
 
         public ControlPanelControl()
         {
             this.InitializeComponent();
+            var trafficLabel = Loc.GetString("Traffic_OpenTooltip");
+            ToolTipService.SetToolTip(TrafficButton, trafficLabel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(TrafficButton, trafficLabel);
             ToolTipService.SetToolTip(PersonalizeButton, L.ControlPanel_Personalize);
             ToolTipService.SetToolTip(ModeSettingsButton, L.ControlPanel_ModeSettings);
             ToolTipService.SetToolTip(AppSettingsButton, L.ControlPanel_AppSettings);
@@ -30,6 +35,7 @@ namespace XrayUI.Views
             ViewModel.ShowLogsRequested         += OnShowLogsRequested;
             ViewModel.ShowRuntimeRequested      += OnShowRuntimeRequested;
             ViewModel.ShowProxyStatusRequested  += OnShowProxyStatusRequested;
+            ViewModel.ShowTrafficRequested      += OnShowTrafficRequested;
             if ((Application.Current as App)?.Window is XrayUI.MainWindow mainWindow)
                 mainWindow.ViewModel.ServerDetail.ShowRuntimeRequested += OnShowRuntimeRequested;
             ViewModel.ShowCustomRulesRequested  += OnShowCustomRulesRequested;
@@ -40,6 +46,7 @@ namespace XrayUI.Views
             ViewModel.ShowLogsRequested         -= OnShowLogsRequested;
             ViewModel.ShowRuntimeRequested      -= OnShowRuntimeRequested;
             ViewModel.ShowProxyStatusRequested  -= OnShowProxyStatusRequested;
+            ViewModel.ShowTrafficRequested      -= OnShowTrafficRequested;
             if ((Application.Current as App)?.Window is XrayUI.MainWindow mainWindow)
                 mainWindow.ViewModel.ServerDetail.ShowRuntimeRequested -= OnShowRuntimeRequested;
             ViewModel.ShowCustomRulesRequested  -= OnShowCustomRulesRequested;
@@ -145,6 +152,28 @@ namespace XrayUI.Views
             }
 
             _proxyStatusWindow.Activate();
+        }
+
+        private void OnShowTrafficRequested(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_trafficWindow is null)
+                {
+                    if ((Application.Current as App)?.Window is not XrayUI.MainWindow mainWindow)
+                        return;
+
+                    _trafficWindow = new TrafficMonitorWindow(mainWindow.ViewModel.Traffic);
+                    _trafficWindow.Closed += (_, _) => _trafficWindow = null;
+                }
+
+                _trafficWindow.Activate();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Traffic] Failed to open traffic window: {ex}");
+                _trafficWindow = null;
+            }
         }
 
         private void OnShowCustomRulesRequested(object? sender, CustomRulesViewModel vm)
