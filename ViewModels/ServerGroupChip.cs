@@ -8,6 +8,7 @@ namespace XrayUI.ViewModels
         {
             All,
             Favorites,
+            SubscriptionGroup,
             Subscription,
             Ungrouped,
         }
@@ -15,6 +16,8 @@ namespace XrayUI.ViewModels
         public ChipKind Kind { get; init; }
 
         public string DisplayName { get; set; } = string.Empty;
+
+        public string? GroupName { get; init; }
 
         public string? SubscriptionId { get; init; }
 

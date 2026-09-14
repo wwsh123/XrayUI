@@ -12,6 +12,7 @@ namespace XrayUI.Tests
             {
                 Id = "subscription-id",
                 Name = "Provider",
+                Group = "大陆专线",
                 Url = "https://example.com/sub",
                 LastUpdated = new DateTimeOffset(2026, 7, 26, 10, 0, 0, TimeSpan.Zero),
                 LastError = "stale provider error",
@@ -29,6 +30,7 @@ namespace XrayUI.Tests
 
             Assert.Equal("subscription-id", presetEntry.Id);
             Assert.Equal("Provider", presetEntry.Name);
+            Assert.Equal("大陆专线", presetEntry.Group);
             Assert.Equal("https://example.com/sub", presetEntry.Url);
             Assert.DoesNotContain(nameof(SubscriptionEntry.LastUpdated), json);
             Assert.DoesNotContain(nameof(SubscriptionEntry.LastError), json);
@@ -48,6 +50,7 @@ namespace XrayUI.Tests
                 {
                   "Id": "legacy-id",
                   "Name": "Legacy provider",
+                  "Group": "海外线路",
                   "Url": "https://example.com/legacy",
                   "LastUpdated": "2026-07-26T10:00:00+00:00",
                   "LastError": "old error",
@@ -66,6 +69,7 @@ namespace XrayUI.Tests
 
             Assert.Equal("legacy-id", imported.Id);
             Assert.Equal("Legacy provider", imported.Name);
+            Assert.Equal("海外线路", imported.Group);
             Assert.Equal("https://example.com/legacy", imported.Url);
             Assert.Null(imported.LastUpdated);
             Assert.Null(imported.LastError);

@@ -31,6 +31,7 @@ namespace XrayUI.ViewModels
             Subscriptions.CollectionChanged += OnCollectionChanged;
             SubscriptionUrl = string.Empty;
             SubscriptionName = string.Empty;
+            SubscriptionGroup = string.Empty;
         }
 
         [ObservableProperty]
@@ -48,6 +49,9 @@ namespace XrayUI.ViewModels
 
         [ObservableProperty]
         public partial string SubscriptionName { get; set; }
+
+        [ObservableProperty]
+        public partial string SubscriptionGroup { get; set; }
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(RefreshAllText))]
@@ -99,7 +103,12 @@ namespace XrayUI.ViewModels
             var url = SubscriptionUrl.Trim();
             if (string.IsNullOrEmpty(url)) return null;
 
-            return new SubscriptionEntry { Url = url, Name = ResolveName(SubscriptionName, url) };
+            return new SubscriptionEntry
+            {
+                Url = url,
+                Name = ResolveName(SubscriptionName, url),
+                Group = NormalizeGroup(SubscriptionGroup),
+            };
         }
 
         [RelayCommand]
@@ -133,10 +142,12 @@ namespace XrayUI.ViewModels
             SubscriptionEntry sub,
             string url,
             string name,
+            string group,
             int autoRefreshIntervalMinutes)
         {
             var oldUrl                    = sub.Url;
             var oldName                   = sub.Name;
+            var oldGroup                  = sub.Group;
             var oldUsage                  = sub.Usage;
             var oldAutoRefreshInterval    = sub.AutoRefreshIntervalMinutes;
             var oldLastRefreshAttempt     = sub.LastRefreshAttempt;
@@ -146,8 +157,9 @@ namespace XrayUI.ViewModels
             var scheduleChanged = oldAutoRefreshInterval != normalizedRefreshInterval;
             var editSaved = false;
 
-            sub.Url  = url;
-            sub.Name = ResolveName(name, url);
+            sub.Url   = url;
+            sub.Name  = ResolveName(name, url);
+            sub.Group = NormalizeGroup(group);
             if (scheduleChanged)
             {
                 sub.AutoRefreshIntervalMinutes = normalizedRefreshInterval;
@@ -176,6 +188,7 @@ namespace XrayUI.ViewModels
                 {
                     sub.Url   = oldUrl;
                     sub.Name  = oldName;
+                    sub.Group = oldGroup;
                     sub.Usage = oldUsage;
                     sub.AutoRefreshIntervalMinutes = oldAutoRefreshInterval;
                     sub.LastRefreshAttempt = oldLastRefreshAttempt;
@@ -198,6 +211,8 @@ namespace XrayUI.ViewModels
         /// <summary>Empty name falls back to the link's host, mirroring the add page.</summary>
         private static string ResolveName(string name, string url) =>
             string.IsNullOrWhiteSpace(name) ? TryGetHost(url) : name.Trim();
+
+        private static string NormalizeGroup(string group) => string.IsNullOrWhiteSpace(group) ? string.Empty : group.Trim();
 
         private static string TryGetHost(string url)
         {

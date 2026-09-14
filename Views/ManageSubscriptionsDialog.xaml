@@ -64,6 +64,10 @@
                      Header="备注名称（可选）"
                      PlaceholderText="留空则使用链接域名"
                      Text="{x:Bind ViewModel.SubscriptionName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBox x:Uid="Subscription_GroupBox"
+                     Header="分类 / 分组（可选）"
+                     PlaceholderText="例如：国内、香港、备用"
+                     Text="{x:Bind ViewModel.SubscriptionGroup, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             <TextBlock x:Uid="Subscription_AutoImportHintText"
                        Text="将自动解析并导入该订阅中的全部节点"
                        FontSize="12"
@@ -234,6 +238,9 @@
                                                     <TextBox x:Uid="Subscription_NameBox"
                                                              Header="备注名称（可选）"
                                                              PlaceholderText="留空则使用链接域名" />
+                                                    <TextBox x:Uid="Subscription_GroupBox"
+                                                             Header="分类 / 分组（可选）"
+                                                             PlaceholderText="例如：国内、香港、备用" />
                                                     <ComboBox x:Uid="Subscription_AutoRefreshBox"
                                                               Header="自动更新"
                                                               SelectedIndex="0"
