@@ -10,6 +10,7 @@ namespace XrayUI.Views
         private ProxyRuntimeWindow? _runtimeWindow;
         private ProxyStatusWindow? _proxyStatusWindow;
         private CustomRulesWindow? _customRulesWindow;
+        private TrafficMonitorWindow? _trafficWindow;
 
         public ControlPanelViewModel ViewModel { get; set; } = null!;
 
@@ -33,6 +34,7 @@ namespace XrayUI.Views
             ViewModel.ShowLogsRequested         += OnShowLogsRequested;
             ViewModel.ShowRuntimeRequested      += OnShowRuntimeRequested;
             ViewModel.ShowProxyStatusRequested  += OnShowProxyStatusRequested;
+            ViewModel.ShowTrafficRequested      += OnShowTrafficRequested;
             if ((Application.Current as App)?.Window is XrayUI.MainWindow mainWindow)
                 mainWindow.ViewModel.ServerDetail.ShowRuntimeRequested += OnShowRuntimeRequested;
             ViewModel.ShowCustomRulesRequested  += OnShowCustomRulesRequested;
@@ -43,6 +45,7 @@ namespace XrayUI.Views
             ViewModel.ShowLogsRequested         -= OnShowLogsRequested;
             ViewModel.ShowRuntimeRequested      -= OnShowRuntimeRequested;
             ViewModel.ShowProxyStatusRequested  -= OnShowProxyStatusRequested;
+            ViewModel.ShowTrafficRequested      -= OnShowTrafficRequested;
             if ((Application.Current as App)?.Window is XrayUI.MainWindow mainWindow)
                 mainWindow.ViewModel.ServerDetail.ShowRuntimeRequested -= OnShowRuntimeRequested;
             ViewModel.ShowCustomRulesRequested  -= OnShowCustomRulesRequested;
@@ -148,6 +151,20 @@ namespace XrayUI.Views
             }
 
             _proxyStatusWindow.Activate();
+        }
+
+        private void OnShowTrafficRequested(object? sender, EventArgs e)
+        {
+            if (_trafficWindow is null)
+            {
+                if ((Application.Current as App)?.Window is not XrayUI.MainWindow mainWindow)
+                    return;
+
+                _trafficWindow = new TrafficMonitorWindow(mainWindow.ViewModel.Traffic);
+                _trafficWindow.Closed += (_, _) => _trafficWindow = null;
+            }
+
+            _trafficWindow.Activate();
         }
 
         private void OnShowCustomRulesRequested(object? sender, CustomRulesViewModel vm)

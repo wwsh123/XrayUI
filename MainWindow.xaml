@@ -196,7 +196,6 @@
 
             </Grid>
         </Grid>
-            <Grid x:Name="TrafficHost" Visibility="{x:Bind ViewModel.TrafficVisibility, Mode=OneWay}" />
         </Grid>
     </Grid>
 </Window>

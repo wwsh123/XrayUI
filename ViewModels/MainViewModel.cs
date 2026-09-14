@@ -147,7 +147,6 @@ namespace XrayUI.ViewModels
 
             ControlPanel.ShowPersonalizeRequested += (_, _) => OpenPersonalize();
             ControlPanel.ExitRequested += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
-            ControlPanel.ShowTrafficRequested += (_, _) => OpenTraffic();
             Personalize.CloseRequested            += (_, _) => ClosePersonalize();
 
             ControlPanel.ShowAppSettingsRequested += (_, _) => OpenAppSettings();
