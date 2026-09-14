@@ -51,6 +51,16 @@ namespace XrayUI.ViewModels
         private static string SubscriptionLabel(SubscriptionEntry sub)
             => string.IsNullOrWhiteSpace(sub.Name) ? UnnamedSubLabel : sub.Name;
 
+        private static string SubscriptionGroupLabel(SubscriptionEntry sub) =>
+            string.IsNullOrWhiteSpace(sub.Group) ? string.Empty : sub.Group.Trim();
+
+        private static string SubscriptionGroupOrName(SubscriptionEntry sub)
+        {
+            var group = SubscriptionGroupLabel(sub);
+            var name = SubscriptionLabel(sub);
+            return string.IsNullOrEmpty(group) ? name : $"{group} / {name}";
+        }
+
         private static readonly HttpClient Http = CreateSubscriptionHttpClient();
 
         private static HttpClient CreateSubscriptionHttpClient()
@@ -567,17 +577,26 @@ namespace XrayUI.ViewModels
 
         private void RebuildGroupChips()
         {
-            // Single pass: count servers grouped by SubscriptionId (empty/null → ungrouped bucket).
+            // Single pass: count servers grouped by subscription, and aggregate them under group names.
             var countsBySub = new Dictionary<string, int>(StringComparer.Ordinal);
+            var countsByGroup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             int ungroupedCount = 0;
             bool hasFavorites = false;
             foreach (var s in Servers)
             {
                 hasFavorites |= s.IsFavorite;
                 if (string.IsNullOrEmpty(s.SubscriptionId))
+                {
                     ungroupedCount++;
-                else
-                    countsBySub[s.SubscriptionId] = countsBySub.GetValueOrDefault(s.SubscriptionId) + 1;
+                    continue;
+                }
+
+                countsBySub[s.SubscriptionId] = countsBySub.GetValueOrDefault(s.SubscriptionId) + 1;
+
+                var sub = _knownSubscriptions.FirstOrDefault(k => string.Equals(k.Id, s.SubscriptionId, StringComparison.Ordinal));
+                var group = sub is null ? null : SubscriptionGroupLabel(sub);
+                if (!string.IsNullOrWhiteSpace(group))
+                    countsByGroup[group] = countsByGroup.GetValueOrDefault(group) + 1;
             }
 
             var knownIds = new HashSet<string>(
@@ -602,14 +621,26 @@ namespace XrayUI.ViewModels
                 });
             }
 
+            foreach (var group in countsByGroup.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+            {
+                GroupChips.Add(new ServerGroupChip
+                {
+                    Kind        = ServerGroupChip.ChipKind.SubscriptionGroup,
+                    DisplayName = group,
+                    GroupName   = group,
+                });
+            }
+
             foreach (var sub in _knownSubscriptions)
             {
                 if (string.IsNullOrEmpty(sub.Id)) continue;
                 if (!countsBySub.TryGetValue(sub.Id, out var count)) continue;
+                var group = SubscriptionGroupLabel(sub);
                 GroupChips.Add(new ServerGroupChip
                 {
                     Kind           = ServerGroupChip.ChipKind.Subscription,
-                    DisplayName    = SubscriptionLabel(sub),
+                    DisplayName    = SubscriptionGroupOrName(sub),
+                    GroupName      = group,
                     SubscriptionId = sub.Id,
                     Subscription   = sub,
                 });
@@ -667,16 +698,19 @@ namespace XrayUI.ViewModels
             var sub = _knownSubscriptions.FirstOrDefault(s => s.Id == server.SubscriptionId);
             if (sub is null) return OrphanSubLabel;
 
-            return SubscriptionLabel(sub);
+            return string.IsNullOrWhiteSpace(sub.Group)
+                ? SubscriptionLabel(sub)
+                : $"{sub.Group.Trim()} / {SubscriptionLabel(sub)}";
         }
 
         private static string? ChipKey(ServerGroupChip? chip) => chip?.Kind switch
         {
-            ServerGroupChip.ChipKind.All          => AllChipKey,
-            ServerGroupChip.ChipKind.Ungrouped    => UngroupedChipKey,
-            ServerGroupChip.ChipKind.Favorites    => FavoritesChipKey,
-            ServerGroupChip.ChipKind.Subscription => chip!.SubscriptionId,
-            _                                     => null,
+            ServerGroupChip.ChipKind.All                => AllChipKey,
+            ServerGroupChip.ChipKind.Ungrouped          => UngroupedChipKey,
+            ServerGroupChip.ChipKind.Favorites          => FavoritesChipKey,
+            ServerGroupChip.ChipKind.SubscriptionGroup => chip!.GroupName,
+            ServerGroupChip.ChipKind.Subscription       => chip!.SubscriptionId,
+            _                                         => null,
         };
 
         private void RebuildGroupedView()
@@ -692,6 +726,13 @@ namespace XrayUI.ViewModels
 
             IEnumerable<ServerEntry> candidates = SelectedChip?.Kind switch
             {
+                ServerGroupChip.ChipKind.SubscriptionGroup =>
+                    Servers.Where(s =>
+                    {
+                        if (string.IsNullOrEmpty(s.SubscriptionId)) return false;
+                        var sub = _knownSubscriptions.FirstOrDefault(k => string.Equals(k.Id, s.SubscriptionId, StringComparison.Ordinal));
+                        return sub is not null && string.Equals(SubscriptionGroupLabel(sub), SelectedChip.GroupName, StringComparison.OrdinalIgnoreCase);
+                    }),
                 ServerGroupChip.ChipKind.Subscription =>
                     Servers.Where(s => s.SubscriptionId == (SelectedChip.SubscriptionId ?? string.Empty)),
                 ServerGroupChip.ChipKind.Ungrouped =>
@@ -1679,6 +1720,7 @@ namespace XrayUI.ViewModels
         {
             Id          = sub.Id,
             Name        = sub.Name,
+            Group       = sub.Group,
             Url         = sub.Url,
             LastUpdated = sub.LastUpdated,
             LastError   = sub.LastError,

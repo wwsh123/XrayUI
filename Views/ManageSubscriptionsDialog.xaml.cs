@@ -33,10 +33,11 @@ namespace XrayUI.Views
         // The edit flyout lives inside a DataTemplate, so x:Name would not generate
         // code-behind fields; the controls are located by position instead. This is the
         // single place that knows the StackPanel layout: [0] URL box, [1] name box,
-        // [2] refresh schedule, last child = save button.
+        // [2] group box, [3] refresh schedule, last child = save button.
         private static (
             TextBox? UrlBox,
             TextBox? NameBox,
+            TextBox? GroupBox,
             ComboBox? ScheduleBox,
             Button? SaveButton) GetEditControls(StackPanel panel)
         {
@@ -44,7 +45,8 @@ namespace XrayUI.Views
             return (
                 children.Count > 0 ? children[0] as TextBox : null,
                 children.Count > 1 ? children[1] as TextBox : null,
-                children.Count > 2 ? children[2] as ComboBox : null,
+                children.Count > 2 ? children[2] as TextBox : null,
+                children.Count > 3 ? children[3] as ComboBox : null,
                 children.Count > 0 ? children[children.Count - 1] as Button : null);
         }
 
@@ -56,9 +58,10 @@ namespace XrayUI.Views
 
             panel.Tag = flyout;
 
-            var (urlBox, nameBox, scheduleBox, _) = GetEditControls(panel);
+            var (urlBox, nameBox, groupBox, scheduleBox, _) = GetEditControls(panel);
             if (urlBox != null) urlBox.Text = sub.Url;
             if (nameBox != null) nameBox.Text = sub.Name;
+            if (groupBox != null) groupBox.Text = sub.Group;
             if (scheduleBox != null)
                 scheduleBox.SelectedIndex =
                     SubscriptionRefreshSchedule.GetIndex(sub.AutoRefreshIntervalMinutes);
@@ -68,7 +71,7 @@ namespace XrayUI.Views
         {
             if (sender is not TextBox { Parent: StackPanel panel } box) return;
 
-            var (_, _, _, saveBtn) = GetEditControls(panel);
+            var (_, _, _, _, saveBtn) = GetEditControls(panel);
             if (saveBtn != null)
                 saveBtn.IsEnabled = !string.IsNullOrWhiteSpace(box.Text);
         }
@@ -78,8 +81,8 @@ namespace XrayUI.Views
             if (sender is not Button { DataContext: SubscriptionEntry sub, Parent: StackPanel panel } btn)
                 return;
 
-            var (urlBox, nameBox, scheduleBox, _) = GetEditControls(panel);
-            if (urlBox == null || nameBox == null || scheduleBox == null) return;
+            var (urlBox, nameBox, groupBox, scheduleBox, _) = GetEditControls(panel);
+            if (urlBox == null || nameBox == null || groupBox == null || scheduleBox == null) return;
 
             var url = urlBox.Text.Trim();
             if (url.Length == 0) return;
@@ -89,6 +92,7 @@ namespace XrayUI.Views
                 sub,
                 url,
                 nameBox.Text,
+                groupBox.Text,
                 SubscriptionRefreshSchedule.GetIntervalAt(scheduleBox.SelectedIndex));
         }
 

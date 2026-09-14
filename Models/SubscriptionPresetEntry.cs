@@ -11,6 +11,7 @@ namespace XrayUI.Models
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string Name { get; set; } = string.Empty;
+        public string Group { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
 
         public static SubscriptionPresetEntry FromSubscription(SubscriptionEntry source)
@@ -21,6 +22,7 @@ namespace XrayUI.Models
             {
                 Id = source.Id,
                 Name = source.Name,
+                Group = source.Group,
                 Url = source.Url,
             };
         }
@@ -29,6 +31,7 @@ namespace XrayUI.Models
         {
             Id = Id,
             Name = Name,
+            Group = Group,
             Url = Url,
         };
     }

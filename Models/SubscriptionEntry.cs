@@ -18,6 +18,7 @@ namespace XrayUI.Models
     {
         private string _id = Guid.NewGuid().ToString("N");
         private string _name = string.Empty;
+        private string _group = string.Empty;
         private string _url = string.Empty;
         private DateTimeOffset? _lastUpdated;
         private string? _lastError;
@@ -40,6 +41,20 @@ namespace XrayUI.Models
             get => _name;
             set { _name = value; OnPropertyChanged(); }
         }
+
+        public string Group
+        {
+            get => _group;
+            set
+            {
+                _group = value ?? string.Empty;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GroupText));
+            }
+        }
+
+        [JsonIgnore]
+        public string GroupText => string.IsNullOrWhiteSpace(_group) ? string.Empty : _group.Trim();
 
         public string Url
         {
