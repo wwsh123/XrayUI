@@ -94,7 +94,7 @@ namespace XrayUI.ViewModels
             _trafficStore = new TrafficMonitorStore(new TrafficMonitorOptions(
                 [XrayConfigConstants.MixedInboundTag, XrayConfigConstants.TunInboundTag],
                 ["proxy", "direct"]));
-            _trafficCollector = new XrayTrafficCollector(_trafficStore, XrayService.ExePath,
+            _trafficCollector = new XrayTrafficCollector(_trafficStore,
                 XrayConfigBuilder.GetStatsApiPort(new AppSettings().LocalMixedPort));
             Traffic = new TrafficMonitorViewModel(_trafficStore);
             xray.LogReceived += (_, line) => _trafficCollector.RecordLogLine(line);

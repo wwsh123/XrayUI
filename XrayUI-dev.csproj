@@ -138,9 +138,16 @@
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
     <PackageReference Include="WinUIEx" Version="2.9.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.31.1" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <!-- Clash YAML import: parsed via YamlDotNet's reflection-free RepresentationModel
          (YamlStream) only — never the typed Deserializer — to stay AOT/trim-safe. -->
     <PackageReference Include="YamlDotNet" Version="18.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Services\Traffic\stats_service.proto" GrpcServices="Client" />
   </ItemGroup>
 
   <!--
